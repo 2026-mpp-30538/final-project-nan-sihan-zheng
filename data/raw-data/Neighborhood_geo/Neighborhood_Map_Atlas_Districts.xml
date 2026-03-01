@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><metadata>
+    <idinfo>
+        <citation>
+            <citeinfo>
+                <title>cityclerk_nma_nhoods_main</title>
+                <geoform>vector digital data</geoform>
+            </citeinfo>
+        </citation>
+        <descript>
+            <abstract>Neighborhood map atlas district areas are derived from the Seattle City Clerk's Office Neighborhood Map Atlas.  These are the largest neighborhood areas and have been supplemented with alternate names from other sources in 2020.  They are subdivided further into the neighborhood map atlas sub-areas called neighborhoods.  The sub-neighborhoods field contains a comma delimited list of all the sub-areas and their alternate names.The original atlas is designed for subject indexing of legislation, photographs, and other documents and is an unofficial delineation of neighborhood boundaries used by the City Clerks Office. Sources for this atlas and the neighborhood names used in it include a 1980 neighborhood map produced by the Department of Community Development, Seattle Public Library indexes, a 1984-1986 Neighborhood Profiles feature series in the Seattle Post-Intelligencer, numerous parks, land use and transportation planning studies, and records in the Seattle Municipal Archives. Many of the neighborhood names are traditional names whose meaning has changed over the years, and others derive from subdivision names or elementary school attendance areas.Disclaimer: The Seattle City Clerk's Office Geographic Indexing Atlas is designed for subject indexing of legislation, photographs, and other records in the City Clerk's Office and Seattle Municipal Archives according to geographic area. Neighborhoods are named and delineated in this collection of maps in order to provide consistency in the way geographic names are used in describing records of the Archives and City Clerk, thus allowing precise retrieval of records. The neighborhood names and boundaries are not intended to represent any &amp;quot;official&amp;quot; City of Seattle neighborhood map. The Office of the City Clerk makes no claims as to the completeness, accuracy, or content of any data contained in the Geographic Indexing Atlas; nor does it make any representation of any kind, including, but not limited to, warranty of the accuracy or fitness for a particular use; nor are any such warranties to be implied or inferred with respect to the representations furnished herein. The maps are subject to change for administrative purposes of the Office of the City Clerk. Information contained in the site, if used for any purpose other than as an indexing and search aid for the databases of the Office of the City Clerk, is being used at one's own risk.</abstract>
+            <purpose>Neighborhood map atlas district areas are derived from the Seattle City Clerk's Office Neighborhood Map Atlas.  These are the largest neighborhood areas and have been supplemented with alternate names from other sources.</purpose>
+        </descript>
+        <timeperd>
+            <timeinfo>
+                <sngdate>
+                    <caldate>20110101</caldate>
+                </sngdate>
+            </timeinfo>
+            <current>publication date</current>
+        </timeperd>
+        <status>
+            <progress>Complete</progress>
+            <update>None planned</update>
+        </status>
+        <spdom>
+            <bounding>
+                <westbc>-122.438158</westbc>
+                <eastbc>-122.235677</eastbc>
+                <northbc>47.735878</northbc>
+                <southbc>47.493342</southbc>
+            </bounding>
+        </spdom>
+        <keywords>
+            <theme>
+                <themekt>None</themekt>
+                <themekey>Neighborhood</themekey>
+            </theme>
+        </keywords>
+        <accconst>Public.</accconst>
+        <useconst>PDDL&amp;nbsp;| This item is meant for public access and use. The City of Seattle makes no representation or warranty as to its accuracy.&amp;nbsp;Important | The City of Seattle has created this service for our&amp;nbsp;GIS Open Data website. We do reserve the right to alter, suspend, re-host, or retire this service at any time and without notice. GIS staff will provide notification of changes via the Comments RSS capability in ArcGIS Online.The City of Seattle makes no representation or warranty as to its accuracy, and in particular, its accuracy as to labeling, dimensions, contours, property boundaries, or placement or location of any map feature thereof.</useconst>
+        <ptcontac>
+            <cntinfo>
+                <cntorgp>
+                    <cntorg>Seattle Public Utilities</cntorg>
+                </cntorgp>
+                <cntpos>GIS Products &amp; Services Supervisor</cntpos>
+                <cntaddr>
+                    <addrtype>mailing</addrtype>
+                    <address>700 5th Ave, Suite 4900</address>
+                    <city>Seattle</city>
+                    <state>WA</state>
+                    <postal>98124-4018</postal>
+                </cntaddr>
+                <cntvoice>206-684-7887</cntvoice>
+                <cntfax>206-684-8914</cntfax>
+                <cntemail>albert.gonzales@seattle.gov</cntemail>
+            </cntinfo>
+        </ptcontac>
+        <datacred>City of Seattle, Office of Planning and Community Development</datacred>
+        <native>Esri ArcGIS 12.6.2.24783</native>
+    </idinfo>
+    <spdoinfo>
+        <direct>Vector</direct>
+        <ptvctinf>
+            <sdtsterm>
+                <sdtstype>GT-polygon composed of chains</sdtstype>
+                <ptvctcnt>0</ptvctcnt>
+            </sdtsterm>
+        </ptvctinf>
+    </spdoinfo>
+    <eainfo>
+        <detailed>
+            <enttyp>
+                <enttypl>cityclerk_nma_nhoods_main</enttypl>
+            </enttyp>
+            <attr>
+                <attrlabl>OBJECTID</attrlabl>
+                <attrdef>Internal feature number.</attrdef>
+                <attrdefs>ESRI</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Sequential unique whole numbers that are automatically generated.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>L_HOOD</attrlabl>
+            </attr>
+            <attr>
+                <attrlabl>SHAPE</attrlabl>
+                <attrdef>Feature geometry.</attrdef>
+                <attrdefs>ESRI</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the features.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>Shape_Length</attrlabl>
+                <attrdef>Length of feature in internal units.</attrdef>
+                <attrdefs>Esri</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Positive real numbers that are automatically generated.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>Shape_Area</attrlabl>
+                <attrdef>Area of feature in internal units squared.</attrdef>
+                <attrdefs>Esri</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Positive real numbers that are automatically generated.</udom>
+                                    
+                </attrdomv>
+            </attr>
+        </detailed>
+    </eainfo>
+    <metainfo>
+        <metd>20201201</metd>
+        <metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn>
+        <metstdv>FGDC-STD-001-1998</metstdv>
+        <mettc>local time</mettc>
+    </metainfo>
+</metadata>
