@@ -114,9 +114,9 @@ manual_mapping = {
     "EASTLAKE - EAST": "Cascade",
     "EASTLAKE - WEST": "Cascade",
     "MONTLAKE/PORTAGE BAY": "Capitol Hill",
-    "ROOSEVELT/RAVENNA": "University",
-    "UNIVERSITY": "University",
-    "SANDPOINT": "University",
+    "ROOSEVELT/RAVENNA": "University District",
+    "UNIVERSITY": "University District",
+    "SANDPOINT": "University District",
     "LAKECITY": "Northgate",
     "NORTHGATE": "Northgate",
 
@@ -141,4 +141,28 @@ call_clean["neighborhood"] = (
 )
 
 call_clean = call_clean.drop(columns=["L_HOOD", "S_HOOD_ALT_NAMES"])
+
 call_clean = call_clean[call_clean["neighborhood"].notna()].copy()
+
+call_clean.to_csv(
+    script_dir / '../data/derived-data/call_clean.csv',
+    index=False
+)
+
+### Nationwide_long Data Cleaning
+raw_point = script_dir / '../data/raw-data/Map-Data-as-of-Sep16-25.csv'
+df_point = pd.read_csv(raw_point)
+
+df_point["Call Categories"] = df_point["Call Categories"].dropna()
+df_point["Call Categories"] = df_point["Call Categories"].str.split(",")
+df_long = df_point.explode("Call Categories")
+
+df_long["Call Categories"] = df_long["Call Categories"].str.strip()
+
+category_counts = (
+    df_long.groupby("Call Categories")
+           .size()
+           .reset_index(name="Number of Programs")
+           .sort_values("Number of Programs", ascending=False)
+)
+df_long.to_csv(script_dir / '../data/derived-data/nationwide_long.csv', index=False)
