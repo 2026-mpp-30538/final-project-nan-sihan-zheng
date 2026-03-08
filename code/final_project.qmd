@@ -1,0 +1,485 @@
+---
+title: "Evaluating the Spatial and Temporal Patterns of CARE Related Emergency Calls in Seattle"
+author: "Sihan Lou, Zheng Chen, Nan Wang"
+date: "2026.3.7"
+format: 
+  pdf:
+    include-in-header: 
+       text: |
+         \usepackage{fvextra}
+         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+include-before-body:
+  text: |
+    \RecustomVerbatimEnvironment{verbatim}{Verbatim}{
+      showspaces = false,
+      showtabs = false,
+      breaksymbolleft={},
+      breaklines
+    }
+execute:
+  echo: false
+---
+```{python}
+import geopandas as gpd
+import pandas as pd
+import os
+from shapely import wkt
+from pathlib import Path
+import altair as alt
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+```
+
+```{python}
+try:
+    script_dir = Path(__file__).parent
+except NameError:
+    script_dir = Path(".").resolve()
+raw_call = script_dir / '../data/raw-data/Call_Data_20260227.csv'
+call = pd.read_csv(raw_call)
+call.head(5)
+call.shape
+### Quick Sanity Check
+dup_mask = call['CAD Event Number'].duplicated(keep=False)
+dup_events = call.loc[dup_mask].sort_values('CAD Event Number')
+dup_events.head(10)
+### If CAD Event Response Category is 'SPD/CARE Co-Response', 
+### Call Sign Dsipatch ID will be recorded twice or third time by different programs
+call['is_care'] = (
+    call['Call Sign Dispatch ID']
+    .str.contains('CARE', case=False, na=False)
+)
+call_sorted = call.sort_values(by=['CAD Event Number', 'is_care'], ascending=[True, False])
+call_care = call_sorted.drop_duplicates(subset='CAD Event Number', keep='first')
+assert call_care['CAD Event Number'].duplicated().sum() == 0, 'There is duplicated CAD number'
+### Filter call type
+initial_call_type = call_care['Initial Call Type'].unique()
+final_call_type = call_care['Final Call Type'].unique()
+call_clean = call_care[
+    ~(
+        call_care['Initial Call Type'].str.contains('TEST', na=False) |
+        call_care['Final Call Type'].str.contains('TEST', na=False)
+    )
+].copy()
+# Parse datetime + add time features (for heatmap)
+TIME_COL = 'CAD Event Original Time Queued'
+call_clean[TIME_COL] = pd.to_datetime(call_clean[TIME_COL], errors="coerce")
+call_clean = call_clean.dropna(subset=[TIME_COL]).copy()
+call_clean = call_clean.rename(columns={TIME_COL: "datetime"})
+call_clean["hour"] = call_clean["datetime"].dt.hour
+call_clean["dayofweek"] = call_clean["datetime"].dt.day_name()
+call_clean["date"] = call_clean["datetime"].dt.date
+# Clean lat/lon + build GeoDataFrame (for maps)
+redacted_lat = (call["Dispatch Latitude"] == "REDACTED").sum()
+redacted_lon = (call["Dispatch Longitude"] == "REDACTED").sum()
+print("Latitude redacted count:", redacted_lat)
+print("Longitude redacted count:", redacted_lon)
+call_clean.shape
+# Recompute unmatched list to display clearly
+raw_neigh = script_dir / '../data/raw-data/Neighborhood_geo/Neighborhood_Map_Atlas_Districts.shp'
+neigh_gdf = gpd.read_file(raw_neigh)
+neigh_gdf.head(5)
+hood_map = neigh_gdf.assign(S_HOOD_ALT_NAMES=neigh_gdf["S_HOOD_ALT"].str.split(",")).explode("S_HOOD_ALT_NAMES")
+hood_map["S_HOOD_ALT_NAMES"] = hood_map["S_HOOD_ALT_NAMES"].str.strip().str.upper()
+call_clean["neighborhood"] = call_clean["Dispatch Neighborhood"].str.strip().str.upper()
+call_clean = call_clean.merge(
+    hood_map[["L_HOOD", "S_HOOD_ALT_NAMES"]],
+    left_on="neighborhood",
+    right_on="S_HOOD_ALT_NAMES",
+    how="left"
+)
+unmatched = call_clean[call_clean["L_HOOD"].isna()][["Dispatch Neighborhood"]].drop_duplicates().sort_values("Dispatch Neighborhood")
+manual_mapping = {
+    "-": None,
+    "UNKNOWN": None,
+    # Ballard
+    "BALLARD NORTH": "Ballard",
+    "BALLARD SOUTH": "Ballard",
+    # Downtown / Central
+    "DOWNTOWN COMMERCIAL": "Downtown",
+    "CHINATOWN/INTERNATIONAL DISTRICT": "Downtown",
+    "SLU/CASCADE": "Cascade",
+    # Capitol Hill / Central Area
+    "CAPITOL HILL": "Capitol Hill",
+    "CENTRAL AREA/SQUIRE PARK": "Central Area",
+    "MADRONA/LESCHI": "Central Area",
+    # Beacon Hill
+    "MID BEACON HILL": "Beacon Hill",
+    "JUDKINS PARK/NORTH BEACON HILL": "Beacon Hill",
+    "BRIGHTON/DUNLAP": "Beacon Hill",
+    # East / North Seattle
+    "EASTLAKE - EAST": "Cascade",
+    "EASTLAKE - WEST": "Cascade",
+    "MONTLAKE/PORTAGE BAY": "Capitol Hill",
+    "ROOSEVELT/RAVENNA": "University District",
+    "UNIVERSITY": "University District",
+    "SANDPOINT": "University District",
+    "LAKECITY": "Northgate",
+    "NORTHGATE": "Northgate",
+    # West Seattle
+    "FAUNTLEROY SW": "West Seattle",
+    "ROXHILL/WESTWOOD/ARBOR HEIGHTS": "West Seattle",
+    "MORGAN": "West Seattle",
+    # South / Industrial
+    "COMMERCIAL DUWAMISH": "Greater Duwamish",
+    "CLAREMONT/RAINIER VISTA": "Greater Duwamish",
+    "LAKEWOOD/SEWARD PARK": "Greater Duwamish",
+    # Other distinct areas
+    "BITTERLAKE": "Northgate",
+    "MAGNOLIA": "Magnolia",
+    "QUEEN ANNE": "Queen Anne"
+}
+call_clean["neighborhood"] = call_clean["L_HOOD"].fillna(call_clean["Dispatch Neighborhood"].str.upper().map(manual_mapping))
+call_clean = call_clean.drop(columns=["L_HOOD", "S_HOOD_ALT_NAMES"])
+call_clean = call_clean[call_clean["neighborhood"].notna()].copy()
+call_clean["final_call_type_clean"] = call_clean["Final Call Type"].astype(str).str.upper().str.strip()
+CATEGORY_KEYWORDS = {
+    "Mental Health": [
+        "MENTAL",
+        "BEHAVIOR",
+        "BEHAVIOURAL",
+        "EMOTIONAL",
+        "CRISIS",
+        "SUICIDE",
+        "SELF HARM",
+        "PSYCH",
+        "PSYCHIATRIC",
+        "ERRATIC",
+        "CARE",
+        "PERSON IN CRISIS",
+        "THREATENING SUICIDE",
+        "EMOTIONAL DISTRESS",
+        "ASSIST",
+        "HELP",
+        "NEEDS ASSISTANCE"
+    ],
+    "Substance Use": [
+        "OVERDOSE",
+        "NARCOTIC",
+        "DRUG",
+        "SUBSTANCE",
+        "INTOX",
+        "INTOXICATED",
+        "ALCOHOL",
+        "DRUNK",
+        "HEROIN",
+        "FENTANYL",
+        "NARCAN",
+        "PASSED OUT",
+        "PERSON USING DRUGS"
+    ],
+    "Medical": [
+        "MEDICAL",
+        "UNCONSCIOUS",
+        "SEIZURE",
+        "CARDIAC",
+        "BREATHING",
+        "INJURY",
+        "ILL",
+        "EMS",
+        "PERSON DOWN",
+        "FAINT",
+        "BLEEDING"
+    ],
+    "Suspicious Person": [
+        "SUSPICIOUS",
+        "LOITER",
+        "TRESPASS",
+        "UNKNOWN PERSON",
+        "PROWLER"
+    ],
+    "Conflict Resolution": [
+        "DISTURBANCE",
+        "DISORDERLY",
+        "ARGUMENT",
+        "VERBAL",
+        "DISPUTE",
+        "FIGHT",
+        "ASSAULT",
+        "ASLT",
+        "DOMESTIC",
+        "DV",
+        "THREAT",
+        "FAMILY DISTURBANCE",
+        "NEIGHBOR DISPUTE"
+    ],
+    "Service Connection": [
+        "WELFARE",
+        "CHECK",
+        "RESOURCE",
+        "HOUSING",
+        "HOMELESS",
+        "SOCIAL",
+        "SERVICES",
+        "REQUEST FOR RESOURCES"
+    ],
+    "Nuisance":[
+        "NUISANCE"
+    ],
+    "Animal Issues": [
+        "ANIMAL",
+        "STRAY",
+        "BITE"
+    ],
+    "Fire/Arson": [
+        "ARSON",
+        "BOMB",
+        "EXPLO",
+        "RECKLESS BURNING",
+        "FIRE"
+    ],
+    "Violent Crime": [
+        "HOMICIDE",
+        "KIDNAP",
+        "ROBBERY",
+        "DRIVE BY",
+        "SHOOTING"
+    ],
+    "Property Crime": [
+        "BURGLARY",
+        "THEFT",
+        "AUTO THEFT",
+        "CAR PROWL",
+        "SHOPLIFT",
+        "PROPERTY DEST",
+        "GRAFFITI",
+        "MISCHIEF"
+    ],
+    "Sexual Offense": [
+        "RAPE",
+        "SEX OFFENSE",
+        "LEWD",
+        "MOLEST",
+        "PROSTITUTION"
+    ],
+    "Missing/Found Person": [
+        "MISSING",
+        "FOUND PERSON",
+        "RUNAWAY",
+        "ABANDONED",
+        "ENDANGERMENT"
+    ],
+    "Traffic": [
+        "TRAFFIC",
+        "D.U.I",
+        "DUI",
+        "MOVING VIOLATION",
+        "PARKING VIOL",
+        "MV COLLISION",
+        "MVC",
+        "COLLISION",
+        "BLOCKING ROADWAY",
+        "BLOCKING TRAFFIC"
+    ],
+    "Weapons": [
+        "WEAPON",
+        "GUN"
+    ],
+    "Warrants/Legal": [
+        "WARRANT",
+        "COURT ORDER"
+    ],
+    "Administrative": [
+        "ASSIGNED DUTY",
+        "DIRECTED PATROL",
+        "OFF DUTY",
+        "FOLLOW UP",
+        "CCR ONLY",
+        "COMMUNITY PRESENCE",
+        "DETAIL BY SUPERVISOR",
+        "OFF DUTY EMPLOYMENT"
+    ],
+    "Hazards": [
+        "HAZARD"
+    ]
+}
+def regroup_call_type(call_type: str) -> str:
+    if pd.isna(call_type) or call_type.strip() == "":
+        return "Unknown"
+    call_type = call_type.upper()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword in call_type:
+                return category
+    return "OTHER"
+call_clean["call_category"] = call_clean["Final Call Type"].apply(regroup_call_type)
+call_clean.to_csv(script_dir / '../data/derived-data/call_clean.csv', index=False)
+```
+
+```{python}
+### Nationwide_long Data Cleaning
+raw_point = script_dir / '../data/raw-data/Map-Data-as-of-Sep16-25.csv'
+df_point = pd.read_csv(raw_point)
+df_point["Call Categories"] = df_point["Call Categories"].dropna()
+df_point["Call Categories"] = df_point["Call Categories"].str.split(",")
+df_long = df_point.explode("Call Categories")
+df_long["Call Categories"] = df_long["Call Categories"].str.strip()
+category_counts = df_long.groupby("Call Categories").size().reset_index(name="Number of Programs").sort_values("Number of Programs", ascending=False)
+df_long.to_csv(script_dir / '../data/derived-data/nationwide_long.csv', index=False)
+```
+
+```{python}
+# improve graph resolution
+import tempfile 
+from IPython.display import SVG, display, Image
+import vl_convert as vlc
+
+def display_altair_png(chart, scale=2):
+    """
+    Render an Altair chart to a PNG and display it inline.
+
+    Parameters
+    ----------
+    chart : altair.Chart
+        Altair chart object to render.
+    scale : int, optional
+        Resolution scaling factor for the PNG (default = 2). Use scale=2 for standard slides. Use scale = 3–4 for dense figures or PDF exports.
+    """
+    png_bytes = vlc.vegalite_to_png(chart.to_dict(), scale=scale)
+
+    # Write to a temporary PNG file and display
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        tmp.write(png_bytes)
+        tmp.flush()
+        display(Image(filename=tmp.name))
+```
+
+```{python}
+# Plot the bar chart for call type distribution
+clean_call = script_dir / '../data/derived-data/call_clean.csv'
+call_clean = pd.read_csv(clean_call)
+call_type_col = "call_category"  
+dist_df = call_clean.dropna(subset=[call_type_col]).groupby(call_type_col, as_index=False).size().rename(columns={"size": "count"}).sort_values("count", ascending=False)
+dist_df["percent"] = dist_df["count"] / dist_df["count"].sum()
+top_n = 15
+dist_plot = dist_df.head(top_n)
+chart_type = alt.Chart(dist_plot).mark_bar().encode(
+    x=alt.X("count:Q", title="Number of Calls"),
+    y=alt.Y(f"{call_type_col}:N", sort="-x", title="Call Type"),
+    tooltip=[call_type_col, "count", alt.Tooltip("percent:Q", format=".2%")]
+).properties(width=400, height=200, title="Composition by Call Type - Distribution of Emergency Calls")
+output_path = script_dir / '../data/derived-data/'
+chart_type.save(output_path / "bar_call_type.png", scale_factor=2)
+display_altair_png(chart_type,scale = 2)
+```
+
+This chart shows the composition of call types within the CARE program specifically.
+We observe that mental health–related incidents make up the largest share of CARE calls, by a significant margin. This confirms that CARE is primarily responding to behavioral and psychological crises, which aligns with its intended mission. 
+
+```{python}
+#| fig-format: png
+#| fig-width: 6
+#| fig-height: 4
+#| out-width: "80%"
+# Plot the heatmap for call volume by day of week and hour of day
+heatmap_df = call_clean.groupby(["dayofweek", "hour"], as_index=False).size().rename(columns={"size": "call_count"})
+weekday_order = [
+    "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday", "Sunday"]
+chart_time = alt.Chart(heatmap_df).mark_rect().encode(
+    x=alt.X("hour:O", title="Hour of Day", axis=alt.Axis(labelAngle=0)),
+    y=alt.Y("dayofweek:O", sort=weekday_order, title="Day of Week"),
+    color=alt.Color("call_count:Q", scale=alt.Scale(scheme="blues"), title="Number of Calls"),
+    tooltip=["dayofweek", "hour", "call_count"]
+).properties(width=400, height=200, title="Behavioral / CARE Calls by Day and Hour")
+output_path = script_dir / '../data/derived-data/'
+chart_time.save(output_path / "heatmap_day_hour.png", scale_factor=2)
+display_altair_png(chart_time,scale = 2)
+```
+
+This heatmap shows the distribution of behavioral and CARE-related calls by day of the week and hour of the day.
+We observe a clear temporal pattern: call volumes are relatively low during early morning hours, gradually increase throughout the day, and peak in the early afternoon, particularly between 12 PM and 3 PM. Evening hours remain moderately high before declining after 9 PM.
+This pattern has important implications for staffing allocation and shift scheduling.
+
+
+```{python}
+#| fig-width: 5
+#| fig-height: 3.5
+#| out-width: "60%"
+# Plot the map for call volume by neighborhood
+call_group = call_clean.groupby('neighborhood').size().reset_index(name='n_calls')
+neigh_gdf = gpd.read_file(raw_neigh)
+neigh_gdf.crs
+plot_df = neigh_gdf.merge(call_group, how='left', left_on='L_HOOD', right_on='neighborhood').fillna(0).reset_index(drop=True)
+fig, ax = plt.subplots(figsize=(2,3))
+ax = plot_df.plot(
+    column='n_calls',
+    cmap='Reds',
+    scheme='quantiles',
+    k=5,
+    linewidth=0.4,
+    edgecolor='white',
+    legend=True,
+    legend_kwds={
+        'title': "CARE Calls (Quantiles)",
+        'fmt': "{:.0f}",
+        'loc': 'center left',
+        'bbox_to_anchor': (1, 0.5)
+        },
+    ax=ax
+)
+plot_df['label_point'] = plot_df.geometry.representative_point()
+top_n = plot_df.nlargest(5, 'n_calls')
+for _, row in top_n.iterrows():
+    ax.text(
+        row['label_point'].x,
+        row['label_point'].y,
+        f"{row['L_HOOD']}\n{int(row['n_calls'])}",
+        ha='center',
+        va='center',
+        fontsize=6,
+        color='white',
+        weight='bold',
+        path_effects=[
+            pe.Stroke(linewidth=1, foreground='grey'),
+            pe.Normal()]
+    )
+ax.set_title("Number of CARE Calls by Large Neighborhood in Seattle", fontsize=14)
+ax.axis('off')
+plt.savefig(script_dir / '../data/derived-data/calls_Seattle.png', dpi=300, bbox_inches='tight')
+plt.show()
+```
+
+This map shows the number of CARE calls aggregated by large neighborhood in Seattle.
+We observe a strong concentration of calls in central areas, particularly Downtown, Capitol Hill, and the University District. Downtown stands out with the highest volume, exceeding 2,700 calls. Other high-demand areas include Northgate and West Seattle.
+This pattern indicates that CARE demand is heavily concentrated in dense, high-activity neighborhoods rather than being evenly distributed across the city.
+
+```{python}
+#| fig-width: 5
+#| fig-height: 3.5
+#| out-width: "60%"
+# Plot the map for socioeconomic disadvantage score by census tract
+shp_call = script_dir / '../data/raw-data/equity_geodata/Racial_and_Social_Equity_Index_for_Countywide_2020_Census_Tracts.shp'
+gdf = gpd.read_file(shp_call)
+score_col = "SOCIOECO_1"
+# Check score column
+gdf[score_col] = gdf[score_col].astype(float)
+print("Score range:", gdf[score_col].min(), gdf[score_col].max())
+# Projection
+try:
+    gdf = gdf.to_crs(epsg=3857)
+except Exception as e:
+    print("CRS transform skipped:", e)
+# Plot
+fig, ax = plt.subplots(figsize=(2,3), dpi=200)
+gdf.plot(
+    column=score_col,
+    ax=ax,
+    legend=True,
+    vmin=0, vmax=1,           
+    linewidth=0.2,
+    edgecolor="white",
+    missing_kwds={"color": "lightgrey", "label": "Missing"}
+)
+ax.set_title("Seattle Socioeconomic Disadvantage Score (0–1)", fontsize=14)
+ax.set_axis_off()
+out_path = script_dir / '../data/derived-data/equity_score_map.png'
+plt.tight_layout()
+plt.savefig(out_path, bbox_inches="tight")
+plt.show()
+print("Saved to:", out_path)
+```
+
+When we compare the CARE call distribution map with the socioeconomic disadvantage map, an important pattern becomes visible.
+The highest concentration of CARE calls appears in central neighborhoods such as Downtown and Capitol Hill. However, the highest levels of socioeconomic disadvantage are more concentrated in the southern parts of Seattle. This suggests that high call volume does not perfectly align with areas of greatest socioeconomic vulnerability.
+From a policy perspective, this highlights the importance of balancing efficiency — responding where calls are highest — with equity — ensuring adequate support in more disadvantaged communities.
